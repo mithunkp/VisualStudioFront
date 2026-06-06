@@ -1,0 +1,193 @@
+<div class="app-container">
+  <header class="app-header">
+    <div>
+      <div class="logo-area"><span class="logo-mark">VS</span><h1 class="logo-text">Viral Studio</h1></div>
+      <p class="subtitle">Build polished vertical clips locally. Spend AI tokens only when you ask for hook discovery.</p>
+    </div>
+    <div class="local-badge"><span></span> Local-first workflow</div>
+  </header>
+
+  <main class="studio-grid">
+    <section class="workspace-panel panel">
+      <div class="panel-heading">
+        <div><span class="eyebrow">01 / SOURCE</span><h2>Choose and frame your clip</h2></div>
+        <div class="input-mode-tabs">
+          <button class="tab-btn" [class.active]="inputMode === 'FILE'" (click)="setInputMode('FILE')">Local file</button>
+          <button class="tab-btn" [class.active]="inputMode === 'URL'" (click)="setInputMode('URL')">Video URL</button>
+        </div>
+      </div>
+
+      <div *ngIf="processingState === 'IDLE' && inputMode === 'FILE' && !selectedFile"
+           class="upload-zone" [class.drag-over]="dragOver"
+           (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
+        <input type="file" id="videoFile" accept="video/mp4" (change)="onFileSelected($event)" class="file-input-hidden" />
+        <label for="videoFile" class="upload-label">
+          <span class="upload-plus">+</span>
+          <span class="upload-text-main">Drop your source video here</span>
+          <span class="upload-text-sub">MP4 up to your server upload limit</span>
+        </label>
+      </div>
+
+      <div *ngIf="processingState === 'IDLE' && inputMode === 'URL' && !selectedFile" class="url-input-container url-full-panel">
+
+        <!-- URL input row -->
+        <div class="url-field-row">
+          <input type="text" [(ngModel)]="videoUrlInput" placeholder="Paste YouTube, Instagram, or direct MP4 URL" class="studio-input" />
+        </div>
+
+        <div class="url-settings-divider"><span>Short options</span></div>
+
+        <!-- Crop focus -->
+        <div class="setting-group">
+          <label class="setting-title">Crop focus</label>
+          <div class="segmented">
+            <button *ngFor="let position of cropPositions" [class.active]="cropPosition === position" (click)="cropPosition = position">{{ position }}</button>
+          </div>
+        </div>
+
+        <!-- On-screen text -->
+        <div class="setting-group">
+          <label class="setting-title">On-screen text</label>
+          <input class="studio-input" maxlength="60" [(ngModel)]="captionText" placeholder="Add a strong headline" />
+        </div>
+
+        <!-- Font & Position -->
+        <div class="setting-grid">
+          <div class="setting-group">
+            <label class="setting-title">Font</label>
+            <select class="studio-input" [(ngModel)]="captionFont">
+              <option *ngFor="let font of fonts" [value]="font.value">{{ font.name }}</option>
+            </select>
+          </div>
+          <div class="setting-group">
+            <label class="setting-title">Position</label>
+            <select class="studio-input" [(ngModel)]="captionPosition">
+              <option *ngFor="let position of captionPositions">{{ position }}</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Colors -->
+        <div class="setting-grid">
+          <label class="color-control">Text color <input type="color" [(ngModel)]="captionColor" /></label>
+          <label class="color-control">Accent <input type="color" [(ngModel)]="accentColor" /></label>
+        </div>
+
+        <!-- Text animation -->
+        <div class="setting-group">
+          <label class="setting-title">Text animation</label>
+          <div class="animation-grid">
+            <button *ngFor="let animation of animations" [class.active]="textAnimation === animation" (click)="textAnimation = animation"><span></span>{{ animation }}</button>
+          </div>
+        </div>
+
+        <!-- AI toggle -->
+        <label class="ai-toggle">
+          <input type="checkbox" [(ngModel)]="useAi" />
+          <span class="toggle-ui"></span>
+          <span><strong>AI hook discovery</strong><small>{{ useAi ? 'Uses transcription + Gemini to find multiple hooks' : 'Off · renders locally with zero AI tokens' }}</small></span>
+        </label>
+
+        <!-- Analyze button -->
+        <button class="btn btn-primary render-btn" [disabled]="!videoUrlInput" (click)="processVideoUrl()">Analyze &amp; render URL <span>→</span></button>
+      </div>
+
+      <div *ngIf="selectedFile && processingState === 'IDLE'" class="editor-stage">
+        <div class="source-preview">
+          <video #sourceVideo [src]="localVideoUrl" controls (loadedmetadata)="onMetadataLoaded(sourceVideo)"></video>
+          <div class="crop-shade crop-shade-left" [class.active]="cropPosition === 'right'"></div>
+          <div class="crop-guide" [ngClass]="'crop-' + cropPosition"></div>
+          <div class="crop-shade crop-shade-right" [class.active]="cropPosition === 'left'"></div>
+          <div class="source-label">9:16 crop preview · {{ cropPosition }}</div>
+        </div>
+
+        <div class="trim-card">
+          <div class="trim-header">
+            <div><strong>Selected section</strong><span>{{ trimStart | number:'1.1-1' }}s → {{ trimEnd | number:'1.1-1' }}s</span></div>
+            <span class="duration-pill">{{ trimEnd - trimStart | number:'1.1-1' }} sec</span>
+          </div>
+          <label>Start <input type="range" min="0" [max]="videoDuration" step="0.1" [ngModel]="trimStart" (ngModelChange)="updateTrimStart($event, sourceVideo)" /></label>
+          <label>End <input type="range" min="0" [max]="videoDuration" step="0.1" [ngModel]="trimEnd" (ngModelChange)="updateTrimEnd($event, sourceVideo)" /></label>
+        </div>
+      </div>
+
+      <div *ngIf="processingState !== 'IDLE' && processingState !== 'ERROR'" class="processing-card">
+        <div class="processing-orbit"><span></span></div>
+        <div><span class="eyebrow">PROCESSING</span><h2>{{ processingState === 'COMPLETE' ? 'Your short is ready' : 'Building your short...' }}</h2>
+          <p *ngIf="processingState !== 'COMPLETE'">{{ useAi ? 'Finding hooks and rendering locally.' : 'Rendering locally with FFmpeg. No AI tokens used.' }}</p>
+        </div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" [style.width.%]="processingState === 'COMPLETE' ? 100 : uploadProgress"></div></div>
+        <button *ngIf="processingState === 'COMPLETE'" class="btn btn-secondary" (click)="reset()">Create another</button>
+      </div>
+
+      <div *ngIf="errorMessage" class="error-alert">
+        <strong>{{ errorMessage }}</strong>
+        <pre *ngIf="errorDetail">{{ errorDetail }}</pre>
+      </div>
+    </section>
+
+    <aside class="settings-panel panel" *ngIf="processingState === 'IDLE'">
+      <div class="panel-heading"><div><span class="eyebrow">02 / STYLE</span><h2>Direct the look</h2></div></div>
+
+      <div class="setting-group">
+        <label class="setting-title">Crop focus</label>
+        <div class="segmented">
+          <button *ngFor="let position of cropPositions" [class.active]="cropPosition === position" (click)="cropPosition = position">{{ position }}</button>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-title">On-screen text</label>
+        <input class="studio-input" maxlength="60" [(ngModel)]="captionText" placeholder="Add a strong headline" />
+      </div>
+
+      <div class="setting-grid">
+        <div class="setting-group"><label class="setting-title">Font</label><select class="studio-input" [(ngModel)]="captionFont"><option *ngFor="let font of fonts" [value]="font.value">{{ font.name }}</option></select></div>
+        <div class="setting-group"><label class="setting-title">Position</label><select class="studio-input" [(ngModel)]="captionPosition"><option *ngFor="let position of captionPositions">{{ position }}</option></select></div>
+      </div>
+
+      <div class="setting-grid">
+        <label class="color-control">Text color <input type="color" [(ngModel)]="captionColor" /></label>
+        <label class="color-control">Accent <input type="color" [(ngModel)]="accentColor" /></label>
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-title">Text animation</label>
+        <div class="animation-grid">
+          <button *ngFor="let animation of animations" [class.active]="textAnimation === animation" (click)="textAnimation = animation"><span></span>{{ animation }}</button>
+        </div>
+      </div>
+
+      <label class="ai-toggle">
+        <input type="checkbox" [(ngModel)]="useAi" />
+        <span class="toggle-ui"></span>
+        <span><strong>AI hook discovery</strong><small>{{ useAi ? 'Uses transcription + Gemini to find multiple hooks' : 'Off · selected section renders locally with zero AI tokens' }}</small></span>
+      </label>
+
+      <button *ngIf="selectedFile" class="btn btn-primary render-btn" (click)="processVideo()">Render selected section <span>→</span></button>
+    </aside>
+
+    <section class="preview-panel panel">
+      <div class="panel-heading"><div><span class="eyebrow">03 / PREVIEW</span><h2>{{ processingState === 'COMPLETE' ? 'Rendered output' : 'Vertical canvas' }}</h2></div><span class="ratio-badge">9:16</span></div>
+      <div class="phone-stage">
+        <div class="phone-frame">
+          <video *ngIf="processingState === 'COMPLETE' && result" controls autoplay [src]="backendUrl + (selectedHook?.video_url || result.videoUrl)"></video>
+          <video *ngIf="processingState !== 'COMPLETE' && localVideoUrl" muted autoplay loop [src]="localVideoUrl" [style.object-position]="cropPosition"></video>
+          <div *ngIf="!localVideoUrl && processingState !== 'COMPLETE'" class="empty-phone"><span>+</span><p>Your live preview appears here</p></div>
+          <div *ngIf="captionText && processingState !== 'COMPLETE'" class="caption-preview"
+               [ngClass]="['caption-' + captionPosition, 'animation-' + textAnimation]"
+               [style.font-family]="captionFont" [style.color]="captionColor" [style.--accent]="accentColor">{{ captionText }}</div>
+        </div>
+      </div>
+      <div class="preview-meta" *ngIf="selectedFile && processingState === 'IDLE'"><span>LIVE PREVIEW</span><strong>{{ selectedFile.name }}</strong><small>Animation loops every 2 seconds</small></div>
+      <button *ngIf="processingState === 'COMPLETE'" class="btn btn-primary download-btn" (click)="downloadVideo()">Download selected short</button>
+
+      <div class="hooks-section" *ngIf="processingState === 'COMPLETE' && result?.hooks?.length">
+        <div class="hooks-title"><strong>{{ result!.hooks.length }} sections</strong><span>Choose the output to preview</span></div>
+        <button *ngFor="let hook of result!.hooks; let i = index" class="hook-card" [class.selected-hook]="hook === selectedHook" (click)="selectHook(hook)">
+          <span class="hook-index">0{{ i + 1 }}</span><span><strong>{{ hook.title }}</strong><small>{{ hook.start_time | number:'1.1-1' }}s – {{ hook.end_time | number:'1.1-1' }}s</small></span>
+        </button>
+      </div>
+    </section>
+  </main>
+</div>
