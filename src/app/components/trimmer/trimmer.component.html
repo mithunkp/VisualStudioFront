@@ -1,0 +1,23 @@
+<section *ngIf="selectedFile" class="bg-[#110f19]/82 border border-white/5 backdrop-blur-md rounded-2xl p-5 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 hover:border-purple-500/20 hover:shadow-[0_15px_35px_-5px_rgba(168,85,247,0.05)] w-full">
+  <div class="flex items-center justify-between gap-4 mb-4">
+    <h2 class="text-base font-bold tracking-tight text-white">Define your clip window</h2>
+  </div>
+  <div class="grid gap-3.5">
+    <div class="relative overflow-hidden w-full aspect-video rounded-xl bg-black">
+      <video #sourceVideo [src]="localVideoUrl" class="w-full h-full object-contain" controls (loadedmetadata)="onMetadataLoaded(sourceVideo)"></video>
+      <div class="hidden" [class.block]="cropPosition === 'right'"></div>
+      <div class="crop-guide" [ngClass]="'crop-' + cropPosition"></div>
+      <div class="hidden" [class.block]="cropPosition === 'left'"></div>
+      <div class="absolute top-2.5 left-2.5 p-1 px-2 text-purple-200 bg-black/70 border border-purple-400/35 rounded-md text-[10px] font-bold uppercase">9:16 crop preview · {{ cropPosition }}</div>
+    </div>
+
+    <div class="p-3.5 bg-white/[0.025] border border-white/5 rounded-xl">
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex flex-col items-start gap-0.5"><strong class="text-xs font-bold text-white">Selected section</strong><span class="text-[10px] text-gray-400">{{ trimStart | number:'1.1-1' }}s → {{ trimEnd | number:'1.1-1' }}s</span></div>
+        <span class="p-1 px-2 rounded-full bg-purple-500/10 text-purple-300 font-semibold text-xs">{{ trimEnd - trimStart | number:'1.1-1' }} sec</span>
+      </div>
+      <label class="grid grid-cols-[35px_1fr] items-center gap-2.5 mt-2.5 text-gray-500 text-[10px] font-medium">Start <input type="range" min="0" [max]="videoDuration" step="0.1" [ngModel]="trimStart" (ngModelChange)="onTrimStartChange($event, sourceVideo)" /></label>
+      <label class="grid grid-cols-[35px_1fr] items-center gap-2.5 mt-2.5 text-gray-500 text-[10px] font-medium">End <input type="range" min="0" [max]="videoDuration" step="0.1" [ngModel]="trimEnd" (ngModelChange)="onTrimEndChange($event, sourceVideo)" /></label>
+    </div>
+  </div>
+</section>

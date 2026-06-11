@@ -3,6 +3,11 @@ import { HttpClient, HttpEventType } from '@angular/common/http';
 import { Component, OnDestroy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
+import { HeaderComponent } from './components/header/header.component';
+import { TrimmerComponent } from './components/trimmer/trimmer.component';
+import { StyleEditorComponent } from './components/style-editor/style-editor.component';
+import { CanvasPreviewComponent } from './components/canvas-preview/canvas-preview.component';
+
 interface HookCandidate {
   start_time: number;
   end_time: number;
@@ -25,9 +30,15 @@ type TextAnimation = 'none' | 'fade' | 'pop' | 'slide';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [
+    CommonModule,
+    FormsModule,
+    HeaderComponent,
+    TrimmerComponent,
+    StyleEditorComponent,
+    CanvasPreviewComponent
+  ],
   templateUrl: './app.component.html',
-  styleUrl: './app.component.css'
 })
 export class AppComponent implements OnDestroy {
   private http = inject(HttpClient);
@@ -91,7 +102,7 @@ export class AppComponent implements OnDestroy {
     if (file) this.setFile(file);
   }
 
-  private setFile(file: File) {
+  setFile(file: File) {
     if (file.type !== 'video/mp4' && !file.name.toLowerCase().endsWith('.mp4')) {
       this.errorMessage = 'Please select an MP4 video file.';
       return;
