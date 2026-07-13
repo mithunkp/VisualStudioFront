@@ -4,20 +4,51 @@
       <div class="logo-area"><span class="logo-mark">VS</span><h1 class="logo-text">Viral Studio</h1></div>
       <p class="subtitle">Build polished vertical clips locally. Spend AI tokens only when you ask for hook discovery.</p>
     </div>
-    <div class="local-badge"><span></span> Local-first workflow</div>
+
+    <!-- API Limits Display -->
+    <div class="limits-container" *ngIf="apiLimits">
+      <div class="limit-badge groq-badge">
+        <span class="badge-title">Groq (Text)</span>
+        <span class="badge-value">{{ apiLimits.groq_requests_remaining }} / {{ apiLimits.groq_requests_limit }} reqs</span>
+        <span class="badge-reset">resets in {{ apiLimits.groq_reset_requests }}</span>
+      </div>
+      <div class="limit-badge gemini-badge">
+        <span class="badge-title">Gemini (Vision)</span>
+        <span class="badge-value">{{ apiLimits.gemini_tier }}</span>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <!-- Key status indicators -->
+      <div class="key-status-bar" *ngIf="keyStoreStatus">
+        <span class="key-pill" [class.key-ok]="keyStoreStatus.groq_configured" [class.key-missing]="!keyStoreStatus.groq_configured">
+          <span class="key-dot"></span> Groq
+        </span>
+        <span class="key-pill" [class.key-ok]="keyStoreStatus.gemini_configured" [class.key-missing]="!keyStoreStatus.gemini_configured">
+          <span class="key-dot"></span> Gemini
+        </span>
+      </div>
+      <button class="btn-keys" (click)="openKeysPage()" title="Configure API Keys">
+        <span class="keys-icon">&#9881;</span> API Keys
+      </button>
+      <div class="local-badge"><span></span> Local-first</div>
+    </div>
   </header>
 
   <main class="studio-grid">
+
+    <!-- ═══════════════════════════ 01 / SOURCE ═══════════════════════════ -->
     <section class="workspace-panel panel">
       <div class="panel-heading">
         <div><span class="eyebrow">01 / SOURCE</span><h2>Choose and frame your clip</h2></div>
         <div class="input-mode-tabs">
           <button class="tab-btn" [class.active]="inputMode === 'FILE'" (click)="setInputMode('FILE')">Local file</button>
-          <button class="tab-btn" [class.active]="inputMode === 'URL'" (click)="setInputMode('URL')">Video URL</button>
+          <button class="tab-btn" [class.active]="inputMode === 'URL'"  (click)="setInputMode('URL')">Video URL</button>
         </div>
       </div>
 
-      <div *ngIf="processingState === 'IDLE' && inputMode === 'FILE' && !selectedFile"
+      <!-- FILE: drop zone (no file selected yet) -->
+      <div *ngIf="processingState === 'IDLE' && inputMode === 'FILE' && !localVideoUrl"
            class="upload-zone" [class.drag-over]="dragOver"
            (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
         <input type="file" id="videoFile" accept="video/mp4" (change)="onFileSelected($event)" class="file-input-hidden" />
@@ -28,112 +59,151 @@
         </label>
       </div>
 
-      <div *ngIf="processingState === 'IDLE' && inputMode === 'URL' && !selectedFile" class="url-input-container url-full-panel">
-
-        <!-- URL input row -->
-        <div class="url-field-row">
-          <input type="text" [(ngModel)]="videoUrlInput" placeholder="Paste YouTube, Instagram, or direct MP4 URL" class="studio-input" />
-        </div>
-
-        <div class="url-settings-divider"><span>Short options</span></div>
-
-        <!-- Crop focus -->
-        <div class="setting-group">
-          <label class="setting-title">Crop focus</label>
-          <div class="segmented">
-            <button *ngFor="let position of cropPositions" [class.active]="cropPosition === position" (click)="cropPosition = position">{{ position }}</button>
-          </div>
-        </div>
-
-        <!-- On-screen text -->
-        <div class="setting-group">
-          <label class="setting-title">On-screen text</label>
-          <input class="studio-input" maxlength="60" [(ngModel)]="captionText" placeholder="Add a strong headline" />
-        </div>
-
-        <!-- Font & Position -->
-        <div class="setting-grid">
-          <div class="setting-group">
-            <label class="setting-title">Font</label>
-            <select class="studio-input" [(ngModel)]="captionFont">
-              <option *ngFor="let font of fonts" [value]="font.value">{{ font.name }}</option>
-            </select>
-          </div>
-          <div class="setting-group">
-            <label class="setting-title">Position</label>
-            <select class="studio-input" [(ngModel)]="captionPosition">
-              <option *ngFor="let position of captionPositions">{{ position }}</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Colors -->
-        <div class="setting-grid">
-          <label class="color-control">Text color <input type="color" [(ngModel)]="captionColor" /></label>
-          <label class="color-control">Accent <input type="color" [(ngModel)]="accentColor" /></label>
-        </div>
-
-        <!-- Text animation -->
-        <div class="setting-group">
-          <label class="setting-title">Text animation</label>
-          <div class="animation-grid">
-            <button *ngFor="let animation of animations" [class.active]="textAnimation === animation" (click)="textAnimation = animation"><span></span>{{ animation }}</button>
-          </div>
-        </div>
-
-        <!-- AI toggle -->
-        <label class="ai-toggle">
-          <input type="checkbox" [(ngModel)]="useAi" />
-          <span class="toggle-ui"></span>
-          <span><strong>AI hook discovery</strong><small>{{ useAi ? 'Uses transcription + Gemini to find multiple hooks' : 'Off · renders locally with zero AI tokens' }}</small></span>
-        </label>
-
-        <!-- Analyze button -->
-        <button class="btn btn-primary render-btn" [disabled]="!videoUrlInput" (click)="processVideoUrl()">Analyze &amp; render URL <span>→</span></button>
+      <!-- URL: input zone (styled identically to file drop zone) -->
+      <div *ngIf="processingState === 'IDLE' && inputMode === 'URL' && !hasVideoLoaded"
+           class="upload-zone url-drop-zone">
+        <span class="upload-plus url-plus-emoji">🔗</span>
+        <span class="upload-text-main">Paste your video URL</span>
+        <input type="text" id="videoUrl"
+               [(ngModel)]="videoUrlInput" (ngModelChange)="onUrlChanged($event)"
+               placeholder="YouTube, Instagram, or direct MP4 link…"
+               class="studio-input url-zone-input" />
+        <span class="upload-text-sub">YouTube · Instagram · Direct MP4</span>
       </div>
 
-      <div *ngIf="selectedFile && processingState === 'IDLE'" class="editor-stage">
+      <!-- EDITOR STAGE: shown once a file / URL is loaded -->
+      <div *ngIf="hasVideoLoaded && processingState === 'IDLE'" class="editor-stage">
+
+        <!-- 16:9 source preview -->
         <div class="source-preview">
-          <video #sourceVideo [src]="localVideoUrl" controls (loadedmetadata)="onMetadataLoaded(sourceVideo)"></video>
-          <div class="crop-shade crop-shade-left" [class.active]="cropPosition === 'right'"></div>
-          <div class="crop-guide" [ngClass]="'crop-' + cropPosition"></div>
-          <div class="crop-shade crop-shade-right" [class.active]="cropPosition === 'left'"></div>
-          <div class="source-label">9:16 crop preview · {{ cropPosition }}</div>
-        </div>
+          <!-- Local file or direct MP4 URL -->
+          <video *ngIf="localVideoUrl" #sourceVideo [src]="localVideoUrl" controls
+                 (loadedmetadata)="onMetadataLoaded()"></video>
 
-        <div class="trim-card">
-          <div class="trim-header">
-            <div><strong>Selected section</strong><span>{{ trimStart | number:'1.1-1' }}s → {{ trimEnd | number:'1.1-1' }}s</span></div>
-            <span class="duration-pill">{{ trimEnd - trimStart | number:'1.1-1' }} sec</span>
+          <!-- YouTube thumbnail preview -->
+          <div *ngIf="!localVideoUrl && youtubeVideoId" class="yt-preview">
+            <img [src]="'https://img.youtube.com/vi/' + youtubeVideoId + '/maxresdefault.jpg'"
+                 (error)="onThumbError($event)" class="yt-thumb" alt="YouTube thumbnail" />
+            <div class="yt-overlay">
+              <div class="yt-play-icon">▶</div>
+              <small>YouTube video · downloaded when you render</small>
+            </div>
           </div>
-          <label>Start <input type="range" min="0" [max]="videoDuration" step="0.1" [ngModel]="trimStart" (ngModelChange)="updateTrimStart($event, sourceVideo)" /></label>
-          <label>End <input type="range" min="0" [max]="videoDuration" step="0.1" [ngModel]="trimEnd" (ngModelChange)="updateTrimEnd($event, sourceVideo)" /></label>
-        </div>
-      </div>
 
+          <div class="crop-guide" [ngClass]="'crop-' + cropPosition"></div>
+          <div class="source-label">9:16 crop · {{ cropPosition }}</div>
+        </div>
+
+        <!-- URL edit bar (always visible in URL mode so user can change link) -->
+        <div *ngIf="inputMode === 'URL'" class="url-edit-row">
+          <input type="text"
+                 [(ngModel)]="videoUrlInput" (ngModelChange)="onUrlChanged($event)"
+                 placeholder="YouTube, Instagram, or direct MP4 URL"
+                 class="studio-input" style="font-size:0.75rem;" />
+        </div>
+
+        <!-- ── Manual Trim Row ────────────────────────────────────────── -->
+        <div class="manual-trim-header">
+          <label class="manual-trim-toggle">
+            <input type="checkbox" [(ngModel)]="manualTrimEnabled" />
+            <span class="toggle-ui"></span>
+            <span class="toggle-label">
+              <strong>Manual trim</strong>
+              <small>Enable to set a specific time range</small>
+            </span>
+          </label>
+          <div *ngIf="manualTrimEnabled" class="trim-time-display">
+            <span class="trim-tv">{{ trimStart | number:'1.1-1' }}s</span>
+            <span class="trim-arrow">→</span>
+            <span class="trim-tv">{{ trimEnd | number:'1.1-1' }}s</span>
+            <span class="duration-pill">{{ (trimEnd - trimStart) | number:'1.1-1' }}s</span>
+          </div>
+        </div>
+
+        <!-- Dual-handle range slider (visible only when manual trim is enabled) -->
+        <div *ngIf="manualTrimEnabled" class="trim-card">
+          <!-- When we have actual video duration, show the dual-handle slider -->
+          <ng-container *ngIf="videoDuration > 0">
+            <div class="dual-range-wrapper">
+              <div class="range-track">
+                <div class="range-fill"
+                     [style.left.%]="trimStartPercent"
+                     [style.right.%]="100 - trimEndPercent"></div>
+              </div>
+              <!-- Start thumb -->
+              <input type="range" class="thumb-range"
+                     [min]="0" [max]="videoDuration" [step]="0.1"
+                     [ngModel]="trimStart"
+                     (ngModelChange)="onDualRangeStart($event)" />
+              <!-- End thumb -->
+              <input type="range" class="thumb-range"
+                     [min]="0" [max]="videoDuration" [step]="0.1"
+                     [ngModel]="trimEnd"
+                     (ngModelChange)="onDualRangeEnd($event)" />
+            </div>
+            <div class="trim-tick-row">
+              <span>0s</span>
+              <span>{{ (videoDuration / 2) | number:'1.0-0' }}s</span>
+              <span>{{ videoDuration | number:'1.0-0' }}s</span>
+            </div>
+          </ng-container>
+
+          <!-- Fallback number inputs when video duration isn't available (YouTube / URL) -->
+          <div *ngIf="videoDuration === 0" class="trim-number-inputs">
+            <label class="trim-num-label">Start (s)
+              <input type="number" class="studio-input trim-num-input"
+                     [(ngModel)]="trimStart" step="0.1" min="0" />
+            </label>
+            <label class="trim-num-label">End (s)
+              <input type="number" class="studio-input trim-num-input"
+                     [(ngModel)]="trimEnd" step="0.1" min="0.1" />
+            </label>
+          </div>
+        </div>
+        <!-- ─────────────────────────────────────────────────────────── -->
+
+      </div><!-- /editor-stage -->
+
+      <!-- Processing status card -->
       <div *ngIf="processingState !== 'IDLE' && processingState !== 'ERROR'" class="processing-card">
         <div class="processing-orbit"><span></span></div>
-        <div><span class="eyebrow">PROCESSING</span><h2>{{ processingState === 'COMPLETE' ? 'Your short is ready' : 'Building your short...' }}</h2>
-          <p *ngIf="processingState !== 'COMPLETE'">{{ useAi ? 'Finding hooks and rendering locally.' : 'Rendering locally with FFmpeg. No AI tokens used.' }}</p>
+        <div>
+          <span class="eyebrow">PROCESSING</span>
+          <h2>{{ processingState === 'COMPLETE' ? 'Your short is ready' : 'Building your short…' }}</h2>
+          <p *ngIf="processingState !== 'COMPLETE'">
+            {{ useAi ? 'Finding hooks and rendering locally.' : 'Rendering locally with FFmpeg. Zero AI tokens.' }}
+          </p>
         </div>
-        <div class="progress-bar-bg"><div class="progress-bar-fill" [style.width.%]="processingState === 'COMPLETE' ? 100 : uploadProgress"></div></div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" [style.width.%]="processingState === 'COMPLETE' ? 100 : uploadProgress"></div>
+        </div>
         <button *ngIf="processingState === 'COMPLETE'" class="btn btn-secondary" (click)="reset()">Create another</button>
       </div>
 
+      <!-- Error display -->
       <div *ngIf="errorMessage" class="error-alert">
         <strong>{{ errorMessage }}</strong>
         <pre *ngIf="errorDetail">{{ errorDetail }}</pre>
       </div>
     </section>
 
+    <!-- ═══════════════════════════ 02 / STYLE ════════════════════════════ -->
     <aside class="settings-panel panel" *ngIf="processingState === 'IDLE'">
       <div class="panel-heading"><div><span class="eyebrow">02 / STYLE</span><h2>Direct the look</h2></div></div>
 
       <div class="setting-group">
         <label class="setting-title">Crop focus</label>
         <div class="segmented">
-          <button *ngFor="let position of cropPositions" [class.active]="cropPosition === position" (click)="cropPosition = position">{{ position }}</button>
+          <button *ngFor="let p of cropPositions" [class.active]="cropPosition === p" (click)="cropPosition = p">{{ p }}</button>
         </div>
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-title">Crop strategy</label>
+        <div class="segmented">
+          <button *ngFor="let m of cropModes" [class.active]="cropMode === m" (click)="cropMode = m">{{ m }}</button>
+        </div>
+        <small class="setting-hint">Static: fixed · Linear: smooth pan · Eased: ease-in/out</small>
       </div>
 
       <div class="setting-group">
@@ -142,52 +212,324 @@
       </div>
 
       <div class="setting-grid">
-        <div class="setting-group"><label class="setting-title">Font</label><select class="studio-input" [(ngModel)]="captionFont"><option *ngFor="let font of fonts" [value]="font.value">{{ font.name }}</option></select></div>
-        <div class="setting-group"><label class="setting-title">Position</label><select class="studio-input" [(ngModel)]="captionPosition"><option *ngFor="let position of captionPositions">{{ position }}</option></select></div>
+        <div class="setting-group">
+          <label class="setting-title">Font</label>
+          <select class="studio-input" [(ngModel)]="captionFont">
+            <option *ngFor="let f of fonts" [value]="f.value">{{ f.name }}</option>
+          </select>
+        </div>
+        <div class="setting-group">
+          <label class="setting-title">Position</label>
+          <select class="studio-input" [(ngModel)]="captionPosition">
+            <option *ngFor="let p of captionPositions" [value]="p">{{ p }}</option>
+          </select>
+        </div>
       </div>
 
       <div class="setting-grid">
         <label class="color-control">Text color <input type="color" [(ngModel)]="captionColor" /></label>
-        <label class="color-control">Accent <input type="color" [(ngModel)]="accentColor" /></label>
+        <label class="color-control">Accent     <input type="color" [(ngModel)]="accentColor" /></label>
       </div>
 
       <div class="setting-group">
         <label class="setting-title">Text animation</label>
         <div class="animation-grid">
-          <button *ngFor="let animation of animations" [class.active]="textAnimation === animation" (click)="textAnimation = animation"><span></span>{{ animation }}</button>
+          <button *ngFor="let a of animations" [class.active]="textAnimation === a" (click)="textAnimation = a">
+            <span></span>{{ a }}
+          </button>
         </div>
       </div>
 
       <label class="ai-toggle">
         <input type="checkbox" [(ngModel)]="useAi" />
         <span class="toggle-ui"></span>
-        <span><strong>AI hook discovery</strong><small>{{ useAi ? 'Uses transcription + Gemini to find multiple hooks' : 'Off · selected section renders locally with zero AI tokens' }}</small></span>
+        <span>
+          <strong>AI hook discovery</strong>
+          <small>{{ useAi ? 'Uses Groq + Gemini to find viral hooks' : 'Off · renders locally, zero AI tokens' }}</small>
+        </span>
       </label>
 
-      <button *ngIf="selectedFile" class="btn btn-primary render-btn" (click)="processVideo()">Render selected section <span>→</span></button>
-    </aside>
-
-    <section class="preview-panel panel">
-      <div class="panel-heading"><div><span class="eyebrow">03 / PREVIEW</span><h2>{{ processingState === 'COMPLETE' ? 'Rendered output' : 'Vertical canvas' }}</h2></div><span class="ratio-badge">9:16</span></div>
-      <div class="phone-stage">
-        <div class="phone-frame">
-          <video *ngIf="processingState === 'COMPLETE' && result" controls autoplay [src]="backendUrl + (selectedHook?.video_url || result.videoUrl)"></video>
-          <video *ngIf="processingState !== 'COMPLETE' && localVideoUrl" muted autoplay loop [src]="localVideoUrl" [style.object-position]="cropPosition"></video>
-          <div *ngIf="!localVideoUrl && processingState !== 'COMPLETE'" class="empty-phone"><span>+</span><p>Your live preview appears here</p></div>
-          <div *ngIf="captionText && processingState !== 'COMPLETE'" class="caption-preview"
-               [ngClass]="['caption-' + captionPosition, 'animation-' + textAnimation]"
-               [style.font-family]="captionFont" [style.color]="captionColor" [style.--accent]="accentColor">{{ captionText }}</div>
+      <!-- Cost estimator -->
+      <div class="cost-card" *ngIf="hasVideoLoaded">
+        <div class="cost-title">Estimated AI cost</div>
+        <div class="cost-row">
+          <span>Groq (Transcription + Hooks):</span>
+          <strong>${{ getEstimatedGroqCost() | number:'1.5-5' }}</strong>
+        </div>
+        <div class="cost-row cost-border">
+          <span>Gemini (Visual Crop):</span>
+          <strong>${{ getEstimatedGeminiCost() | number:'1.5-5' }}</strong>
+        </div>
+        <div class="cost-total">
+          <span>Total estimate:</span>
+          <strong>${{ (getEstimatedGroqCost() + getEstimatedGeminiCost()) | number:'1.5-5' }}</strong>
         </div>
       </div>
-      <div class="preview-meta" *ngIf="selectedFile && processingState === 'IDLE'"><span>LIVE PREVIEW</span><strong>{{ selectedFile.name }}</strong><small>Animation loops every 2 seconds</small></div>
-      <button *ngIf="processingState === 'COMPLETE'" class="btn btn-primary download-btn" (click)="downloadVideo()">Download selected short</button>
 
+      <!-- Keys required warning (AI mode ON and keys missing) -->
+      <div class="no-keys-warning" *ngIf="useAi && (!keyStoreStatus?.groq_configured || !keyStoreStatus?.gemini_configured)">
+        <span>&#9888;</span>
+        <span>AI mode requires API keys &mdash; <button class="inline-link" (click)="openKeysPage()">configure them here</button></span>
+      </div>
+
+      <button *ngIf="hasVideoLoaded" class="btn btn-primary render-btn"
+              (click)="useAi && (!keyStoreStatus?.groq_configured || !keyStoreStatus?.gemini_configured) ? openKeysPage() : submitJob()"
+              [class.btn-locked]="useAi && (!keyStoreStatus?.groq_configured || !keyStoreStatus?.gemini_configured)">
+        <span *ngIf="useAi && (!keyStoreStatus?.groq_configured || !keyStoreStatus?.gemini_configured)">&#128273; Set API Keys First</span>
+        <span *ngIf="!useAi || (keyStoreStatus?.groq_configured && keyStoreStatus?.gemini_configured)">Render clip <span>&#8594;</span></span>
+      </button>
+    </aside>
+
+    <!-- ═══════════════════════════ 03 / PREVIEW ══════════════════════════ -->
+    <section class="preview-panel panel">
+      <div class="panel-heading">
+        <div>
+          <span class="eyebrow">03 / PREVIEW</span>
+          <h2>{{ processingState === 'COMPLETE' ? 'Rendered output' : 'Vertical canvas' }}</h2>
+        </div>
+        <span class="ratio-badge">9:16</span>
+      </div>
+
+      <div class="phone-stage">
+        <div class="phone-frame">
+          <!-- Rendered video (after processing) -->
+          <video *ngIf="processingState === 'COMPLETE' && result" controls autoplay
+                 [src]="backendUrl + (selectedHook?.video_url || result.videoUrl)"></video>
+
+          <!-- Live local/direct-URL video preview -->
+          <video *ngIf="processingState !== 'COMPLETE' && localVideoUrl" muted autoplay loop
+                 [src]="localVideoUrl" [style.object-position]="cropPosition"></video>
+
+          <!-- YouTube thumbnail in phone preview -->
+          <img *ngIf="processingState !== 'COMPLETE' && !localVideoUrl && youtubeVideoId"
+               [src]="'https://img.youtube.com/vi/' + youtubeVideoId + '/maxresdefault.jpg'"
+               (error)="onThumbError($event)"
+               alt="Thumbnail" style="width:100%;height:100%;object-fit:cover;display:block;" />
+
+          <!-- Empty state -->
+          <div *ngIf="!hasVideoLoaded && processingState !== 'COMPLETE'" class="empty-phone">
+            <span>+</span><p>Your live preview appears here</p>
+          </div>
+
+          <!-- Caption overlay (live preview) -->
+          <div *ngIf="captionText && processingState !== 'COMPLETE'" class="caption-preview"
+               [ngClass]="['caption-' + captionPosition, 'animation-' + textAnimation]"
+               [style.font-family]="captionFont"
+               [style.color]="captionColor"
+               [style.--accent]="accentColor">{{ captionText }}</div>
+        </div>
+      </div>
+
+      <div class="preview-meta" *ngIf="hasVideoLoaded && processingState === 'IDLE'">
+        <span>LIVE PREVIEW</span>
+        <strong>{{ selectedFile ? selectedFile.name : (isYoutubeUrl ? 'YouTube Video' : 'Remote URL') }}</strong>
+        <small>Animation loops every 2 seconds</small>
+      </div>
+
+      <button *ngIf="processingState === 'COMPLETE'" class="btn btn-primary download-btn" (click)="downloadVideo()">
+        Download selected short
+      </button>
+
+      <!-- ── Hooks results section ── -->
       <div class="hooks-section" *ngIf="processingState === 'COMPLETE' && result?.hooks?.length">
-        <div class="hooks-title"><strong>{{ result!.hooks.length }} sections</strong><span>Choose the output to preview</span></div>
-        <button *ngFor="let hook of result!.hooks; let i = index" class="hook-card" [class.selected-hook]="hook === selectedHook" (click)="selectHook(hook)">
-          <span class="hook-index">0{{ i + 1 }}</span><span><strong>{{ hook.title }}</strong><small>{{ hook.start_time | number:'1.1-1' }}s – {{ hook.end_time | number:'1.1-1' }}s</small></span>
-        </button>
+
+        <!-- Manual trim result (highlighted separately) -->
+        <div *ngIf="manualHookResult" class="hooks-group">
+          <div class="hooks-group-label manual-label">✂ Manual trim</div>
+          <button class="hook-card manual-hook-card"
+                  [class.selected-hook]="manualHookResult === selectedHook"
+                  (click)="selectHook(manualHookResult)">
+            <span class="hook-index manual-index">M</span>
+            <span>
+              <strong>{{ manualHookResult.title }}</strong>
+              <small>{{ manualHookResult.start_time | number:'1.1-1' }}s – {{ manualHookResult.end_time | number:'1.1-1' }}s</small>
+            </span>
+          </button>
+        </div>
+
+        <!-- AI-discovered hooks -->
+        <div *ngIf="aiHookResults.length" class="hooks-group">
+          <div class="hooks-group-label ai-label">✦ AI discovered</div>
+          <button *ngFor="let hook of aiHookResults; let i = index"
+                  class="hook-card"
+                  [class.selected-hook]="hook === selectedHook"
+                  (click)="selectHook(hook)">
+            <span class="hook-index">0{{ i + 1 }}</span>
+            <span>
+              <strong>{{ hook.title }}</strong>
+              <small>{{ hook.start_time | number:'1.1-1' }}s – {{ hook.end_time | number:'1.1-1' }}s</small>
+            </span>
+          </button>
+        </div>
+
+        <!-- Fallback: no manual/AI split (e.g. AI-only with no is_manual flag) -->
+        <ng-container *ngIf="!manualHookResult && !aiHookResults.length">
+          <div class="hooks-title">
+            <strong>{{ result!.hooks.length }} sections</strong>
+            <span>Choose the output to preview</span>
+          </div>
+          <button *ngFor="let hook of result!.hooks; let i = index"
+                  class="hook-card"
+                  [class.selected-hook]="hook === selectedHook"
+                  (click)="selectHook(hook)">
+            <span class="hook-index">0{{ i + 1 }}</span>
+            <span>
+              <strong>{{ hook.title }}</strong>
+              <small>{{ hook.start_time | number:'1.1-1' }}s – {{ hook.end_time | number:'1.1-1' }}s</small>
+            </span>
+          </button>
+        </ng-container>
+
       </div>
     </section>
+
   </main>
+
+  <!-- ═══════════════════════════ API KEYS PAGE ═══════════════════════════ -->
+  <div class="keys-overlay" *ngIf="showKeysPage" (click)="$event.target === $event.currentTarget && closeKeysPage()">
+    <div class="keys-modal">
+
+      <!-- Modal header -->
+      <div class="keys-modal-header">
+        <div>
+          <span class="eyebrow">CONFIGURATION</span>
+          <h2 class="keys-modal-title">
+            {{ (!keyStoreStatus?.groq_configured || !keyStoreStatus?.gemini_configured) ? 'Setup Required' : 'API Keys' }}
+          </h2>
+          <p class="keys-modal-sub">
+            {{ (!keyStoreStatus?.groq_configured || !keyStoreStatus?.gemini_configured)
+              ? 'Add your Groq and Gemini API keys to unlock AI features. They are stored only on this server.'
+              : 'Your keys are stored locally on this server and never leave it.' }}
+          </p>
+        </div>
+        <!-- Only show close button when both keys are already configured -->
+        <button class="keys-close" *ngIf="keyStoreStatus?.groq_configured && keyStoreStatus?.gemini_configured"
+                (click)="closeKeysPage()">&times;</button>
+      </div>
+
+      <!-- Current status bar -->
+      <div class="keys-status-strip" *ngIf="keyStoreStatus">
+        <div class="key-status-item" [class.configured]="keyStoreStatus.groq_configured">
+          <span class="ks-dot"></span>
+          <span>Groq: <strong>{{ keyStoreStatus.groq_configured ? 'Configured (' + keyStoreStatus.groq_source + ')' : 'Not set' }}</strong></span>
+        </div>
+        <div class="key-status-item" [class.configured]="keyStoreStatus.gemini_configured">
+          <span class="ks-dot"></span>
+          <span>Gemini: <strong>{{ keyStoreStatus.gemini_configured ? 'Configured (' + keyStoreStatus.gemini_source + ')' : 'Not set' }}</strong></span>
+        </div>
+      </div>
+
+      <div class="keys-body">
+
+        <!-- ── Groq Card ──────────────────────────────────────────────── -->
+        <div class="api-card groq-card">
+          <div class="api-card-header">
+            <div class="api-logo groq-logo">G</div>
+            <div>
+              <h3 class="api-name">Groq API Key</h3>
+              <p class="api-desc">Powers fast Whisper transcription (speech-to-text) using <code>whisper-large-v3-turbo</code>.</p>
+            </div>
+          </div>
+
+          <!-- How to generate -->
+          <div class="how-to">
+            <div class="how-to-title">&#128273; How to get your Groq API key</div>
+            <ol class="how-to-steps">
+              <li>Go to <a href="https://console.groq.com" target="_blank" rel="noopener" class="ext-link">console.groq.com &#8599;</a> and sign up / log in (free).</li>
+              <li>In the left sidebar click <strong>API Keys</strong>.</li>
+              <li>Click <strong>"Create API Key"</strong>, give it a name.</li>
+              <li>Copy the key that starts with <code>gsk_…</code> and paste it below.</li>
+            </ol>
+            <a href="https://console.groq.com/keys" target="_blank" rel="noopener" class="quick-link-btn groq-btn">
+              &#8599; Open Groq Console &rarr; API Keys
+            </a>
+          </div>
+
+          <!-- Input row -->
+          <div class="key-input-row">
+            <div class="key-input-wrap" [class.is-valid]="groqKeyStatus === 'valid'" [class.is-invalid]="groqKeyStatus === 'invalid'">
+              <input
+                id="groqKeyInput"
+                [type]="showGroqKey ? 'text' : 'password'"
+                [(ngModel)]="groqKeyInput"
+                placeholder="gsk_…"
+                class="key-input"
+                autocomplete="off"
+                (keyup.enter)="validateKey('groq')" />
+              <button class="show-hide-btn" (click)="showGroqKey = !showGroqKey" type="button">
+                {{ showGroqKey ? '&#128065;&#65039;' : '&#128274;' }}
+              </button>
+            </div>
+            <button class="validate-btn" [disabled]="!groqKeyInput.trim() || groqKeyStatus === 'validating'"
+                    (click)="validateKey('groq')">
+              {{ groqKeyStatus === 'validating' ? 'Checking…' : 'Test Key' }}
+            </button>
+          </div>
+          <div class="key-feedback" [class.ok]="groqKeyStatus === 'valid'" [class.err]="groqKeyStatus === 'invalid'"
+               *ngIf="groqKeyMessage">{{ groqKeyMessage }}</div>
+        </div>
+
+        <!-- ── Gemini Card ────────────────────────────────────────────── -->
+        <div class="api-card gemini-card">
+          <div class="api-card-header">
+            <div class="api-logo gemini-logo">✦</div>
+            <div>
+              <h3 class="api-name">Gemini API Key</h3>
+              <p class="api-desc">Powers AI hook discovery and smart visual crop analysis using <code>gemini-2.5-flash</code>.</p>
+            </div>
+          </div>
+
+          <!-- How to generate -->
+          <div class="how-to">
+            <div class="how-to-title">&#128273; How to get your Gemini API key</div>
+            <ol class="how-to-steps">
+              <li>Go to <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="ext-link">Google AI Studio &#8599;</a> and sign in with your Google account.</li>
+              <li>Click <strong>"Create API key"</strong>.</li>
+              <li>Select an existing Google Cloud project or create a new one.</li>
+              <li>Copy the key that starts with <code>AIza…</code> and paste it below.</li>
+            </ol>
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="quick-link-btn gemini-btn">
+              &#8599; Open Google AI Studio &rarr; API Keys
+            </a>
+          </div>
+
+          <!-- Input row -->
+          <div class="key-input-row">
+            <div class="key-input-wrap" [class.is-valid]="geminiKeyStatus === 'valid'" [class.is-invalid]="geminiKeyStatus === 'invalid'">
+              <input
+                id="geminiKeyInput"
+                [type]="showGeminiKey ? 'text' : 'password'"
+                [(ngModel)]="geminiKeyInput"
+                placeholder="AIza…"
+                class="key-input"
+                autocomplete="off"
+                (keyup.enter)="validateKey('gemini')" />
+              <button class="show-hide-btn" (click)="showGeminiKey = !showGeminiKey" type="button">
+                {{ showGeminiKey ? '&#128065;&#65039;' : '&#128274;' }}
+              </button>
+            </div>
+            <button class="validate-btn" [disabled]="!geminiKeyInput.trim() || geminiKeyStatus === 'validating'"
+                    (click)="validateKey('gemini')">
+              {{ geminiKeyStatus === 'validating' ? 'Checking…' : 'Test Key' }}
+            </button>
+          </div>
+          <div class="key-feedback" [class.ok]="geminiKeyStatus === 'valid'" [class.err]="geminiKeyStatus === 'invalid'"
+               *ngIf="geminiKeyMessage">{{ geminiKeyMessage }}</div>
+        </div>
+
+      </div><!-- /keys-body -->
+
+      <!-- Save bar -->
+      <div class="keys-save-bar">
+        <div class="keys-save-msg ok" *ngIf="keysSaveMessage">&#10003; {{ keysSaveMessage }}</div>
+        <div class="keys-save-msg err" *ngIf="keysSaveError">&#9888; {{ keysSaveError }}</div>
+        <div class="keys-save-note">Keys are validated before saving, then stored in <code>keys.json</code> on the server.</div>
+        <button class="btn btn-primary save-keys-btn" (click)="saveKeys()" [disabled]="keysSaving">
+          {{ keysSaving ? 'Validating &amp; Saving…' : 'Save Keys' }}
+        </button>
+      </div>
+
+    </div><!-- /keys-modal -->
+  </div><!-- /keys-overlay -->
+
 </div>
